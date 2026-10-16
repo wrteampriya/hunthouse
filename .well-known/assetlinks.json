@@ -1,0 +1,15 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.hunthouse.realestate",
+            "sha256_cert_fingerprints": [
+                "ebc56f5f48c91cf16b46396efd898ebf12443170ec06b0259c02e3008b2aa9f4",
+                "dfa91de63b573857c5877cb63669424d76d8e6407cc90f299bfe142f49fc1a81"
+            ]
+        }
+    }
+]

@@ -1,0 +1,160 @@
+/* Sidebar responsive styles */
+/* Hide close button by default (desktop) */
+.sidebar-close-btn {
+    display: none;
+}
+
+/* LTR close button positioning - Show up to 1199px */
+@media (max-width: 1199.98px) {
+    html:not([dir="rtl"]) .sidebar-close-btn {
+        display: inline-block;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: none;
+        border: none;
+        color: #6c757d;
+        font-size: 1.2rem;
+        padding: 5px;
+        cursor: pointer;
+        z-index: 1000;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+
+    /* RTL close button positioning - Show up to 1199px */
+    html[dir="rtl"] .sidebar-close-btn {
+        display: inline-block;
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: none;
+        border: none;
+        color: #6c757d;
+        font-size: 1.2rem;
+        padding: 5px;
+        cursor: pointer;
+        z-index: 1000;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+}
+
+.sidebar-close-btn:hover {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.sidebar-close-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.25);
+}
+
+/* Mobile sidebar overlay */
+@media (max-width: 767.98px) {
+    /* Ensure sidebar-wrapper uses smooth transition on mobile */
+    /* Override the default 0.5s transition for faster, smoother mobile experience */
+    html:not([dir="rtl"]) .sidebar-wrapper {
+        transition: left 0.3s ease-out !important;
+    }
+    
+    html[dir="rtl"] .sidebar-wrapper {
+        transition: right 0.3s ease-out !important;
+    }
+    
+    /* Add overlay when sidebar is open on mobile */
+    .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1040;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+    }
+    
+    .sidebar-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    /* Ensure sidebar is above overlay - LTR */
+    html:not([dir="rtl"]) #sidebar {
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+    }
+    
+    /* Ensure sidebar is above overlay - RTL */
+    html[dir="rtl"] #sidebar {
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+    }
+}
+
+/* Desktop behavior - keep existing functionality */
+@media (min-width: 1200px) {
+    /* Hide close button on desktop (1200px and above) */
+    .sidebar-close-btn {
+        display: none;
+    }
+    
+    /* LTR desktop */
+    html:not([dir="rtl"]) #sidebar {
+        position: relative;
+        transform: none !important;
+    }
+    
+    /* RTL desktop */
+    html[dir="rtl"] #sidebar {
+        position: relative;
+        transform: none !important;
+    }
+}
+
+/* Burger button styling */
+.burger-btn {
+    color: #6c757d;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.burger-btn:hover {
+    color: #495057;
+    text-decoration: none;
+}
+
+/* Ensure proper spacing */
+.sidebar-header {
+    padding: 1rem;
+}
+
+/* Animation for smooth transitions - handled by sidebar-wrapper */
+
+/* Mobile-specific adjustments */
+@media (max-width: 767.98px) {
+    .sidebar-wrapper {
+        height: 100vh;
+        overflow-y: auto;
+    }
+    
+    /* Ensure logo is centered with close button */
+    .sidebar-header .d-flex {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* RTL-specific adjustments */
+    html[dir="rtl"] .sidebar-header .d-flex {
+        width: 100%;
+        justify-content: center;
+    }
+}

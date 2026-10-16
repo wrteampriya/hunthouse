@@ -1,0 +1,103 @@
+# name: Deploy
+
+# on:
+#   push:
+#     branches:
+#       - development
+#       - stage
+# env:
+#   ACTIONS_STEP_DEBUG: true
+#   ACTIONS_RUNNER_DEBUG: true
+
+# concurrency:
+#   group: deploy-${{ github.ref_name }}
+#   cancel-in-progress: false
+
+# jobs:
+#   deploy:
+#     name: Deploy to ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+#     runs-on: ubuntu-latest
+#     environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v6
+#         with:
+#           fetch-depth: 0
+#           filter: blob:none
+
+#       - name: Check what changed
+#         id: changes
+#         run: |
+#           BEFORE="${{ github.event.before }}"
+#           AFTER="${{ github.sha }}"
+
+#           # On a brand-new branch there is no previous commit; treat everything as changed
+#           if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+#             echo "New branch detected - running all steps"
+#             echo "composer=true" >> $GITHUB_OUTPUT
+#             echo "migrations=true" >> $GITHUB_OUTPUT
+#             echo "seeders=true" >> $GITHUB_OUTPUT
+#             exit 0
+#           fi
+
+#           CHANGED=$(git diff --name-only "$BEFORE" "$AFTER")
+
+#           if echo "$CHANGED" | grep -qE 'composer\.(json|lock)'; then
+#             echo "composer=true" >> $GITHUB_OUTPUT
+#           else
+#             echo "composer=false" >> $GITHUB_OUTPUT
+#           fi
+#           if echo "$CHANGED" | grep -qE 'database/migrations/'; then
+#             echo "migrations=true" >> $GITHUB_OUTPUT
+#           else
+#             echo "migrations=false" >> $GITHUB_OUTPUT
+#           fi
+#           if echo "$CHANGED" | grep -qE 'database/seeders/'; then
+#             echo "seeders=true" >> $GITHUB_OUTPUT
+#           else
+#             echo "seeders=false" >> $GITHUB_OUTPUT
+#           fi
+
+#       - name: Deploy
+#         uses: appleboy/ssh-action@v1.2.5
+#         env:
+#           BRANCH: ${{ github.ref_name }}
+#           COMPOSER_CHANGED: ${{ steps.changes.outputs.composer }}
+#           MIGRATIONS_CHANGED: ${{ steps.changes.outputs.migrations }}
+#           SEEDERS_CHANGED: ${{ steps.changes.outputs.seeders }}
+#         with:
+#           host: ${{ secrets.SSH_HOST }}
+#           username: ${{ secrets.SSH_USER }}
+#           key: ${{ secrets.SSH_KEY }}
+#           port: ${{ secrets.SSH_PORT }}
+#           envs: BRANCH,COMPOSER_CHANGED,MIGRATIONS_CHANGED,SEEDERS_CHANGED
+#           script: |
+#             set -ex
+#             cd ${{ secrets.DEPLOY_PATH }}
+
+#             trap 'php artisan up' EXIT
+
+#             php artisan down --refresh=15 || true
+
+#             git fetch --depth=1 origin "$BRANCH"
+#             git reset --hard FETCH_HEAD
+
+#             # Prod only: clean up git objects to save space
+#             if [ "$BRANCH" = "main" ]; then
+#               git reflog expire --expire=now --all
+#               git gc --prune=now
+#             fi
+
+#             if [ "$COMPOSER_CHANGED" = "true" ]; then
+#               COMPOSER_FLAGS="--no-interaction --prefer-dist --optimize-autoloader"
+#               [ "$BRANCH" != "development" ] && COMPOSER_FLAGS="$COMPOSER_FLAGS --classmap-authoritative"
+#               [ "$BRANCH" = "main" ] && COMPOSER_FLAGS="$COMPOSER_FLAGS --no-dev"
+#               composer install $COMPOSER_FLAGS
+#             fi
+
+#             if [ "$MIGRATIONS_CHANGED" = "true" ]; then
+#               php artisan migrate
+#             fi
+
+#             php artisan up
