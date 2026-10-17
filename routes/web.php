@@ -385,6 +385,7 @@ Route::middleware(['language'])->group(function () {
         // / START :: PROPERTY ROUTE
 
         Route::prefix('property')->group(function () {
+            Route::get('search-sellers', [PropertController::class, 'searchSellers'])->name('property.search-sellers');
             Route::post('generate-slug', [PropertController::class, 'generateAndCheckSlug'])->name('property.generate-slug');
             Route::delete('remove-threeD-image/{id}', [PropertController::class, 'removeThreeDImage'])->name('property.remove-threeD-image');
             Route::post('property-documents', [PropertController::class, 'removeDocument'])->name('property.remove-documents');

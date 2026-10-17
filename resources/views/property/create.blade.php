@@ -68,6 +68,49 @@
 
                 {{-- Category --}}
                 <div class="card-body">
+                    {{-- Property Owner / Seller --}}
+                    <div class="col-md-12 col-12 form-group mb-3">
+                        <label class="form-label fw-bold">{{ __('Property Owner / Seller') }}</label>
+                        <div class="d-flex flex-wrap gap-4 mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="property_owner_type" id="owner_admin" value="admin" {{ !isset($selectedSeller) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="owner_admin">
+                                    <i class="bi bi-shield-check text-primary me-1"></i> {{ __('Admin (Listed as Admin)') }}
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="property_owner_type" id="owner_seller" value="seller" {{ isset($selectedSeller) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="owner_seller">
+                                    <i class="bi bi-person text-success me-1"></i> {{ __('Customer / Seller') }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="seller_select_wrapper" class="{{ isset($selectedSeller) ? '' : 'd-none' }} mt-2">
+                            <label for="seller_id" class="form-label">{{ __('Select Seller') }} <span class="text-danger">*</span></label>
+                            <select name="seller_id" id="seller_id" class="form-select form-control-sm" style="width: 100%;">
+                                @if(isset($selectedSeller) && $selectedSeller)
+                                    <option value="{{ $selectedSeller->id }}" selected>
+                                        {{ $selectedSeller->name }} ({{ $selectedSeller->mobile ?: $selectedSeller->email }}) [{{ $selectedSeller->is_agent ? __('Agent') : __('User') }}] (#{{ $selectedSeller->id }})
+                                    </option>
+                                @endif
+                            </select>
+                            <small class="text-muted d-block mt-1">{{ __('Search seller by name, email, phone or ID.') }}</small>
+
+                            <div id="seller_info_badge" class="{{ isset($selectedSeller) ? '' : 'd-none' }} mt-2">
+                                <div class="alert alert-light border py-2 px-3 mb-0 d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                        <span class="fw-bold" id="seller_badge_name">{{ isset($selectedSeller) ? $selectedSeller->name : '' }}</span>
+                                        <span class="badge bg-info ms-2" id="seller_badge_role">{{ isset($selectedSeller) ? ($selectedSeller->is_agent ? __('Agent') : __('User')) : '' }}</span>
+                                        <div class="small text-muted" id="seller_badge_contact">{{ isset($selectedSeller) ? ($selectedSeller->mobile ?: $selectedSeller->email) : '' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="my-3">
+
                     <div class="col-md-12 col-12 form-group mandatory">
                         {{ Form::label('category', __('Category'), ['class' => 'form-label col-12 ']) }}
                         <select name="category" class="form-select form-control-sm" data-parsley-minSelect='1' id="category" required>
@@ -362,7 +405,7 @@
                                 </div>
                                 <div class="col-md-12 col-12 form-group mandatory">
                                     {{ Form::label('address', __('Client Address'), ['class' => 'form-label col-12 ']) }}
-                                    {{ Form::textarea('client_address', system_setting('company_address') ?? "", [
+                                    {{ Form::textarea('client_address', (isset($selectedSeller) && !empty($selectedSeller->address)) ? $selectedSeller->address : (system_setting('company_address') ?? ""), [
                                         'class' => 'form-control ',
                                         'placeholder' => __('Client Address'),
                                         'rows' => '4',
@@ -518,6 +561,108 @@
                     $('#duration').hide();
                     $('#price_duration').removeAttr('required');
                 }
+            });
+
+            // Seller selection Select2 and radio handling
+            var defaultCompanyAddress = @json(system_setting('company_address') ?? "");
+
+            function initSellerSelect2() {
+                $('#seller_id').select2({
+                    placeholder: '{{ __("Search seller by name, email, phone or ID...") }}',
+                    allowClear: true,
+                    width: '100%',
+                    theme: 'bootstrap-5',
+                    ajax: {
+                        url: '{{ route("property.search-sellers") }}',
+                        dataType: 'json',
+                        delay: 250,
+                        cache: true,
+                        data: function(params) {
+                            return {
+                                q: params.term || '',
+                                page: params.page || 1
+                            };
+                        },
+                        processResults: function(data, params) {
+                            params.page = params.page || 1;
+                            return {
+                                results: data.results || [],
+                                pagination: {
+                                    more: !!(data.pagination && data.pagination.more)
+                                }
+                            };
+                        }
+                    },
+                    minimumInputLength: 0
+                });
+
+                $('#seller_id').on('select2:select', function(e) {
+                    var data = e.params.data;
+                    if (data) {
+                        $('#seller_badge_name').text(data.name || data.text);
+                        $('#seller_badge_role').text(data.role || '');
+                        $('#seller_badge_contact').text(data.contact || '');
+                        $('#seller_info_badge').removeClass('d-none');
+                        if (data.address && data.address.trim() !== '') {
+                            $('#client-address').val(data.address);
+                        }
+                    }
+                });
+
+                $('#seller_id').on('select2:clear select2:unselect', function() {
+                    $('#seller_info_badge').addClass('d-none');
+                    $('#seller_badge_name').text('');
+                    $('#seller_badge_role').text('');
+                    $('#seller_badge_contact').text('');
+                    $('#client-address').val(defaultCompanyAddress);
+                });
+            }
+
+            initSellerSelect2();
+
+            $('input[name="property_owner_type"]').on('change', function() {
+                if ($(this).val() === 'seller') {
+                    $('#seller_select_wrapper').removeClass('d-none');
+                    $('#seller_id').attr('required', true);
+                } else {
+                    $('#seller_select_wrapper').addClass('d-none');
+                    $('#seller_id').removeAttr('required').val(null).trigger('change');
+                    $('#seller_info_badge').addClass('d-none');
+                    $('#client-address').val(defaultCompanyAddress);
+                }
+            });
+
+            $('#myForm').on('submit', function(e) {
+                var isDraft = $('#is_draft').val() === '1';
+                if (!isDraft && $('input[name="property_owner_type"]:checked').val() === 'seller') {
+                    if (!$('#seller_id').val()) {
+                        e.preventDefault();
+                        if (typeof Toastify === 'function') {
+                            Toastify({
+                                text: "{{ __('Please select a seller.') }}",
+                                duration: 4000,
+                                close: true,
+                                gravity: "top",
+                                position: "right",
+                                backgroundColor: "#dc3545",
+                            }).showToast();
+                        } else {
+                            alert("{{ __('Please select a seller.') }}");
+                        }
+                        $('#seller_id').select2('open');
+                        return false;
+                    }
+                }
+            });
+
+            $('#myForm').on('reset', function() {
+                setTimeout(function() {
+                    $('#owner_admin').prop('checked', true);
+                    $('#seller_select_wrapper').addClass('d-none');
+                    $('#seller_id').removeAttr('required').val(null).trigger('change');
+                    $('#seller_info_badge').addClass('d-none');
+                    $('#client-address').val(defaultCompanyAddress);
+                }, 10);
             });
         });
 

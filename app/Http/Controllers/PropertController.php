@@ -17,6 +17,7 @@ use App\Models\Property;
 use App\Models\PropertyImages;
 use App\Models\RejectReason;
 use App\Models\Setting;
+use App\Models\UserPackage;
 use App\Models\Usertokens;
 use App\Rules\VideoUrlRule;
 use App\Services\AuditLogService;
@@ -90,8 +91,64 @@ class PropertController extends Controller
             $geminiEnabled = HelperService::getSettingData('gemini_ai_enabled') == '1';
             $countries = Country::with(['defaultLanguage', 'currency'])->where('status', 1)->get();
             $currencies = Currency::where('status', 1)->get();
-            return view('property.create', compact('category', 'parameters', 'currency_symbol', 'facility', 'distanceValue', 'languages', 'geminiEnabled', 'countries', 'currencies'));
+
+            $sellerId = request('seller_id') ?? request('customer_id') ?? request('seller') ?? request('customer');
+            $selectedSeller = $sellerId ? Customer::find($sellerId) : null;
+
+            return view('property.create', compact('category', 'parameters', 'currency_symbol', 'facility', 'distanceValue', 'languages', 'geminiEnabled', 'countries', 'currencies', 'selectedSeller'));
         }
+    }
+
+    /**
+     * Search sellers (customers) for property creation.
+     */
+    public function searchSellers(Request $request)
+    {
+        if (! has_permissions('create', 'property') && ! has_permissions('read', 'property')) {
+            return response()->json(['results' => [], 'pagination' => ['more' => false]]);
+        }
+
+        $term = $request->input('q', '');
+        $page = (int) $request->input('page', 1);
+        $perPage = 20;
+
+        $query = Customer::where('isActive', 1);
+
+        if ($term !== '') {
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhere('mobile', 'like', "%{$term}%")
+                    ->orWhere('id', $term);
+            });
+        }
+
+        $total = $query->count();
+        $items = $query->orderBy('id', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get(['id', 'name', 'email', 'mobile', 'address', 'is_agent']);
+
+        $results = $items->map(function ($c) {
+            $name = $c->name ?? '';
+            $contact = $c->mobile ?: ($c->email ?? '');
+            $type = $c->is_agent ? trans('Agent') : trans('User');
+            $text = trim($name.($contact ? " ({$contact})" : '')." [{$type}] (#{$c->id})");
+
+            return [
+                'id' => $c->id,
+                'text' => $text,
+                'name' => $c->name,
+                'role' => $type,
+                'contact' => $contact,
+                'address' => $c->address ?? '',
+            ];
+        })->toArray();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => ['more' => ($page * $perPage) < $total],
+        ]);
     }
 
     /**
@@ -130,6 +187,8 @@ class PropertController extends Controller
                 ],
                 'custom_video' => 'nullable|file|mimes:mp4,webm,ogg|max:20480',
                 'is_draft' => 'nullable|in:0,1',
+                'seller_id' => 'nullable|exists:customers,id',
+                'customer_id' => 'nullable|exists:customers,id',
 
             ], [], [
                 'documents.*' => 'document :position',
@@ -137,6 +196,12 @@ class PropertController extends Controller
 
             try {
                 DB::beginTransaction();
+
+                $sellerId = $request->input('seller_id') ?: $request->input('customer_id');
+                if ($request->input('property_owner_type') === 'admin') {
+                    $sellerId = null;
+                }
+                $seller = ! empty($sellerId) ? Customer::find($sellerId) : null;
 
                 $saveProperty = new Property;
                 // NOT NULL columns with no sensible placeholder and no FK
@@ -151,12 +216,34 @@ class PropertController extends Controller
                 $saveProperty->price = $request->price ?? 0;
                 $saveProperty->request_status = $isDraft ? 'draft' : 'approved';
                 $saveProperty->status = $isDraft ? 0 : 1;
-                $saveProperty->package_id = 0;
                 $saveProperty->city = (isset($request->city)) ? $request->city : '';
                 $saveProperty->country = (isset($request->country)) ? $request->country : '';
                 $saveProperty->state = (isset($request->state)) ? $request->state : '';
                 $saveProperty->latitude = (isset($request->latitude)) ? $request->latitude : '';
                 $saveProperty->longitude = (isset($request->longitude)) ? $request->longitude : '';
+
+                if ($seller) {
+                    $saveProperty->added_by = $seller->id;
+                    $saveProperty->post_type = 1;
+                    $saveProperty->role_context = $seller->is_agent ? 'agent' : 'user';
+
+                    $activePackage = UserPackage::where('user_id', $seller->id)->onlyActive()->first();
+                    $saveProperty->package_id = $activePackage ? $activePackage->package_id : 0;
+                    if (! $isDraft) {
+                        $expirationDate = HelperService::calculateExpirationDate($seller->id);
+                        $saveProperty->expiry_date = $expirationDate ?: Carbon::now()->addDays(30);
+                    } else {
+                        $saveProperty->expiry_date = null;
+                    }
+                } else {
+                    $saveProperty->added_by = 0; // Admin Added
+                    $saveProperty->post_type = 0;
+                    $saveProperty->role_context = 'agent';
+                    $saveProperty->package_id = 0;
+                    $saveProperty->expiry_date = null;
+                }
+
+                $watermarkAgentId = ($seller && $seller->is_agent) ? $seller->id : null;
 
                 $requiredLanguageId = Country::requiredLanguageIdFor($request->country_id);
                 $filledLanguageIds = HelperService::filledTranslationLanguageIds($request);
@@ -187,20 +274,17 @@ class PropertController extends Controller
                 } else {
                     $saveProperty->video_link = $request->video_link;
                 }
-                $saveProperty->post_type = 0;
-                $saveProperty->added_by = 0; // Admin Added
                 $saveProperty->meta_title = isset($request->meta_title) ? $request->meta_title : $request->title;
                 $saveProperty->meta_description = $request->meta_description;
                 $saveProperty->meta_keywords = $request->keywords;
                 $saveProperty->schema_markup = $request->schema_markup;
                 $saveProperty->rentduration = $request->price_duration;
                 $saveProperty->is_premium = $request->is_premium ?? 0;
-                $saveProperty->role_context = 'agent';
 
                 if ($request->hasFile('title_image')) {
                     $path = config('global.PROPERTY_TITLE_IMG_PATH');
                     $requestFile = $request->file('title_image');
-                    $saveProperty->title_image = FileService::compressAndUpload($requestFile, $path, true);
+                    $saveProperty->title_image = FileService::compressAndUpload($requestFile, $path, true, $watermarkAgentId);
                 } else {
                     $saveProperty->title_image = '';
                 }
@@ -278,7 +362,7 @@ class PropertController extends Controller
                     foreach ($request->file('gallery_images') as $file) {
                         $path = config('global.PROPERTY_GALLERY_IMG_PATH').$saveProperty->id.'/';
                         $requestFile = $file;
-                        $imageName = FileService::compressAndUpload($requestFile, $path, true);
+                        $imageName = FileService::compressAndUpload($requestFile, $path, true, $watermarkAgentId);
                         $galleryImagesData[] = [
                             'propertys_id' => $saveProperty->id,
                             'image' => $imageName,
@@ -341,10 +425,10 @@ class PropertController extends Controller
                 // END ::Add Translations
 
                 DB::commit();
-                AuditLogService::log('property', $saveProperty->id, $saveProperty->title, 'created', "Property '{$saveProperty->title}' created by admin");
+                $ownerLabel = $seller ? "seller '{$seller->name}' (#{$seller->id})" : 'admin';
+                AuditLogService::log('property', $saveProperty->id, $saveProperty->title, 'created', "Property '{$saveProperty->title}' created for {$ownerLabel} by admin");
                 ResponseService::successResponse('Data Created Successfully');
             } catch (Exception $e) {
-                dd($e);
                 DB::rollBack();
                 ResponseService::logErrorResponse($e, 'Create Property Issue');
             }
