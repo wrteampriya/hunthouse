@@ -1,0 +1,40 @@
+<?php
+
+namespace App\Models;
+
+use App\Services\FileService;
+use App\Traits\HasAppTimezone;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class BankReceiptFile extends Model
+{
+    use HasAppTimezone, HasFactory;
+
+    protected $dates = ['created_at', 'updated_at', 'deleted_at'];
+
+    protected $fillable = [
+        'payment_transaction_id',
+        'file',
+    ];
+
+    public static function boot()
+    {
+        parent::boot();
+        static::deleting(function ($model) {
+            unlink_image($model->file);
+        });
+    }
+
+    public function paymentTransaction()
+    {
+        return $this->belongsTo(PaymentTransaction::class, 'payment_transaction_id');
+    }
+
+    public function getFileAttribute($file)
+    {
+        $path = $file ? config('global.BANK_RECEIPT_FILE_PATH').$file : null;
+
+        return ! empty($path) ? FileService::getFileUrl($path) : null;
+    }
+}
