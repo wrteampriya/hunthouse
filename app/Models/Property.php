@@ -460,9 +460,16 @@ class Property extends Model
 
     public function getIsUserVerifiedAttribute()
     {
-        return $this->whereHas('customer.verifyCustomer', function ($query) {
-            $query->where(['user_id' => $this->added_by, 'status' => 'approved']);
-        })->count() ? true : false;
+        // Only the owner of THIS property can make its badge show
+        $verification = VerifyCustomer::where('user_id', $this->added_by)->first();
+
+        // Permanent manual/admin approval
+        if ($verification && $verification->status === 'approved' && in_array($verification->source, ['admin', 'manual'])) {
+            return true;
+        }
+
+        // Subscription approval: only while a package is active
+        return UserPackage::where('user_id', $this->added_by)->onlyActive()->exists();
     }
 
     public function getIsFeatureAvailableAttribute()

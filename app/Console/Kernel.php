@@ -38,6 +38,9 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('app:expire-listings')->hourly();
 
+        // Set users unverified when their subscription package expires
+        $schedule->command('app:expire-subscription-verifications')->hourly();
+
         // Hard-delete stories past their 24-hour window and remove their files
         $schedule->command('stories:delete-expired')->hourly();
     }

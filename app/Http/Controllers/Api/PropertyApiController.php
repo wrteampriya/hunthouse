@@ -14,6 +14,7 @@ use App\Models\CityImage;
 use App\Models\Country;
 use App\Models\HomepageSection;
 use App\Models\InterestedUser;
+use App\Models\Notifications;
 use App\Models\OutdoorFacilities;
 use App\Models\parameter;
 use App\Models\PaymentTransaction;
@@ -21,8 +22,10 @@ use App\Models\Projects;
 use App\Models\PropertiesDocument;
 use App\Models\Property;
 use App\Models\PropertyImages;
+use App\Models\Story;
 use App\Models\user_reports;
 use App\Models\UserInterest;
+use App\Models\Usertokens;
 use App\Models\VerifyCustomer;
 use App\Rules\VideoUrlRule;
 use App\Services\ApiResponseService;
@@ -31,17 +34,15 @@ use App\Services\FileService;
 use App\Services\HelperService;
 use App\Services\ResponseService;
 use Carbon\Carbon;
+use Dedoc\Scramble\Attributes\HeaderParameter;
 use Exception;
 use Illuminate\Http\Request;
-use App\Models\Notifications;
-use App\Models\Usertokens;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Dedoc\Scramble\Attributes\HeaderParameter;
 
 class PropertyApiController extends Controller
 {
@@ -308,15 +309,15 @@ class PropertyApiController extends Controller
                         return $q->where('country_id', $viewedPropertyCountryId);
                     })
                     ->where('role_context', $propertyAddedAs)->inRandomOrder()->with(['category.translations', 'translations', 'customer' => function ($query) {
-                    $query->withCount([
-                        'projects' => function ($query) {
-                            $query->onlyActive();
-                        },
-                        'property' => function ($query) {
-                            $query->onlyActive();
-                        },
-                    ])->withStoryStatus();
-                }])->limit(10);
+                        $query->withCount([
+                            'projects' => function ($query) {
+                                $query->onlyActive();
+                            },
+                            'property' => function ($query) {
+                                $query->onlyActive();
+                            },
+                        ])->withStoryStatus();
+                    }])->limit(10);
                 if ((isset($id) && ! empty($id))) {
                     $getSimilarPropertiesQueryData = $similarPropertyQuery->where('id', '!=', $id)->get()->map(function ($item) {
                         if ($item->category) {
@@ -1057,7 +1058,6 @@ class PropertyApiController extends Controller
                 'message' => $validator->errors()->first(),
             ]);
         }
-        
 
         try {
             DB::beginTransaction();
@@ -1069,7 +1069,7 @@ class PropertyApiController extends Controller
 
             // add property as draft if user send is_draft as true, otherwise proceed with normal flow
             if ($request->boolean('is_draft')) {
-                $isDraft = true;   
+                $isDraft = true;
             }
 
             if ($request->has('id') && ! empty($request->id)) {
@@ -2417,7 +2417,7 @@ class PropertyApiController extends Controller
 
                 // Compute once — avoids N+1 inside the map below (agent role only)
                 $isAgentRole = $request->user_active_role === 'agent';
-                $agentHasActiveStory = $isAgentRole && \App\Models\Story::where('agent_id', $loggedInUserData->id)->active()->exists();
+                $agentHasActiveStory = $isAgentRole && Story::where('agent_id', $loggedInUserData->id)->active()->exists();
 
                 // Get the property data with extra data and changes :- is_premium, post_created and promoted
                 $propertyData = $propertyQuery->skip($offset)->take($limit)->orderBy('id', 'DESC')->get()->map(function ($property) use ($loggedInUserData, $agentHasActiveStory, $isAgentRole) {
@@ -2831,28 +2831,28 @@ class PropertyApiController extends Controller
             }
 
             // Extract filter variables
-            $propertyType    = $filters['property_type'] ?? null;
-            $categoryId      = $filters['category_id'] ?? null;
-            $categorySlugId  = $filters['category_slug_id'] ?? null;
-            $country         = $filters['location']['country'] ?? null;
-            $state           = $filters['location']['state'] ?? null;
-            $city            = $filters['location']['city'] ?? null;
-            $placeId         = $filters['location']['place_id'] ?? null;
-            $latitude        = $filters['location']['latitude'] ?? null;
-            $longitude       = $filters['location']['longitude'] ?? null;
-            $range           = $filters['location']['radius'] ?? null;
-            $bounds          = $filters['location']['bounds'] ?? null;
-            $minPrice        = $filters['price']['min_price'] ?? null;
-            $maxPrice        = $filters['price']['max_price'] ?? null;
-            $postedSince     = $filters['posted_since'] ?? null;
-            $promoted        = $filters['flags']['promoted'] ?? null;
-            $mostViewed      = $filters['flags']['most_viewed'] ?? null;
-            $mostLiked       = $filters['flags']['most_liked'] ?? null;
-            $getPremium      = $filters['flags']['get_all_premium_properties'] ?? null;
-            $parameters      = $filters['parameters'] ?? null;
-            $nearbyPlaces    = $filters['nearby_places'] ?? null;
-            $search          = $filters['search'] ?? null;
-            $addedAs         = $filters['role_context'] ?? null;
+            $propertyType = $filters['property_type'] ?? null;
+            $categoryId = $filters['category_id'] ?? null;
+            $categorySlugId = $filters['category_slug_id'] ?? null;
+            $country = $filters['location']['country'] ?? null;
+            $state = $filters['location']['state'] ?? null;
+            $city = $filters['location']['city'] ?? null;
+            $placeId = $filters['location']['place_id'] ?? null;
+            $latitude = $filters['location']['latitude'] ?? null;
+            $longitude = $filters['location']['longitude'] ?? null;
+            $range = $filters['location']['radius'] ?? null;
+            $bounds = $filters['location']['bounds'] ?? null;
+            $minPrice = $filters['price']['min_price'] ?? null;
+            $maxPrice = $filters['price']['max_price'] ?? null;
+            $postedSince = $filters['posted_since'] ?? null;
+            $promoted = $filters['flags']['promoted'] ?? null;
+            $mostViewed = $filters['flags']['most_viewed'] ?? null;
+            $mostLiked = $filters['flags']['most_liked'] ?? null;
+            $getPremium = $filters['flags']['get_all_premium_properties'] ?? null;
+            $parameters = $filters['parameters'] ?? null;
+            $nearbyPlaces = $filters['nearby_places'] ?? null;
+            $search = $filters['search'] ?? null;
+            $addedAs = $filters['role_context'] ?? null;
 
             // Property Mapper
             $propertyMapper = function ($propertyData) {
@@ -2934,7 +2934,7 @@ class PropertyApiController extends Controller
 
             if (! empty($nearbyPlaces)) {
                 foreach ($nearbyPlaces as $nearbyPlace) {
-                    $nearbyPlaceId    = $nearbyPlace['id'];
+                    $nearbyPlaceId = $nearbyPlace['id'];
                     $nearbyPlaceValue = $nearbyPlace['value'] ?? null;
                     if (! empty($nearbyPlaceValue)) {
                         $propertyQuery->whereHas('assignfacilities', function ($q) use ($nearbyPlaceId, $nearbyPlaceValue) {
@@ -2969,9 +2969,15 @@ class PropertyApiController extends Controller
             if (! empty($placeId)) {
                 $location = $this->resolvePlaceIdToLocation($placeId);
                 if ($location) {
-                    if ($location['city'])    $propertyQuery->where('city', $location['city']);
-                    if ($location['state'])   $propertyQuery->where('state', $location['state']);
-                    if ($location['country']) $propertyQuery->where('country', $location['country']);
+                    if ($location['city']) {
+                        $propertyQuery->where('city', $location['city']);
+                    }
+                    if ($location['state']) {
+                        $propertyQuery->where('state', $location['state']);
+                    }
+                    if ($location['country']) {
+                        $propertyQuery->where('country', $location['country']);
+                    }
                 }
             } elseif ($validBounds = $this->extractValidBounds($bounds)) {
                 // Exact map-viewport rectangle — strictly more accurate than a
@@ -3028,11 +3034,16 @@ class PropertyApiController extends Controller
             if (isset($postedSince) && $postedSince !== '') {
                 $now = Carbon::now();
                 switch ((int) $postedSince) {
-                    case 0: $propertyQuery->where('created_at', '>=', $now->copy()->subDays(7)); break;
-                    case 1: $propertyQuery->whereDate('created_at', $now->copy()->subDay()); break;
-                    case 2: $propertyQuery->where('created_at', '>=', $now->copy()->subMonth()); break;
-                    case 3: $propertyQuery->where('created_at', '>=', $now->copy()->subMonths(3)); break;
-                    case 4: $propertyQuery->where('created_at', '>=', $now->copy()->subMonths(6)); break;
+                    case 0: $propertyQuery->where('created_at', '>=', $now->copy()->subDays(7));
+                        break;
+                    case 1: $propertyQuery->whereDate('created_at', $now->copy()->subDay());
+                        break;
+                    case 2: $propertyQuery->where('created_at', '>=', $now->copy()->subMonth());
+                        break;
+                    case 3: $propertyQuery->where('created_at', '>=', $now->copy()->subMonths(3));
+                        break;
+                    case 4: $propertyQuery->where('created_at', '>=', $now->copy()->subMonths(6));
+                        break;
                 }
             }
 
@@ -3075,7 +3086,7 @@ class PropertyApiController extends Controller
                 $property->is_agent = $customer?->is_agent ?? false;
 
                 $property->is_user_verified =
-                    $customer?->verifyCustomer?->status === 'approved';
+                    $customer?->is_user_verified ?? false;
 
                 $property->become_agent_status =
                     $customer?->becomeAgent?->status ?? 'not_applied';

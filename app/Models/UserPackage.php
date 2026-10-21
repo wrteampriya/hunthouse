@@ -8,6 +8,8 @@ use App\Traits\HasRoleContext;
 use App\Services\HelperService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Models\VerifyCustomer;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -24,6 +26,25 @@ class UserPackage extends Model
         'end_date',
         'role_context',
     );
+
+    protected static function booted()
+    {
+        static::created(function ($userPackage) {
+            $existing = VerifyCustomer::where('user_id', $userPackage->user_id)->first();
+            // If already approved manually by admin, preserve admin source
+            if ($existing && $existing->status === 'approved' && in_array($existing->source, ['admin', 'manual'])) {
+                return;
+            }
+
+            VerifyCustomer::updateOrCreate(
+                ['user_id' => $userPackage->user_id],
+                [
+                    'status' => 'approved',
+                    'source' => 'subscription',
+                ]
+            );
+        });
+    }
 
     /**
      * Get all of the user_package_limit for the UserPackage
@@ -79,5 +100,4 @@ class UserPackage extends Model
         }
         return false;
     }
-
 }

@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Services\FileService;
 use App\Services\HelperService;
 use App\Traits\HasAppTimezone;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Auth;
@@ -198,7 +200,7 @@ class Customer extends Authenticatable
         return $this->hasMany(Story::class, 'agent_id');
     }
 
-    public function scopeWithStoryStatus(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeWithStoryStatus(Builder $query): Builder
     {
         return $query->withExists(['stories as has_active_story' => fn ($q) => $q->active()]);
     }
@@ -235,6 +237,7 @@ class Customer extends Authenticatable
     {
         if ($value === null || $value === '') {
             $this->attributes['mobile'] = null;
+
             return;
         }
 
@@ -250,6 +253,7 @@ class Customer extends Authenticatable
                 if ($phoneUtil->isValidNumber($proto)) {
                     $this->attributes['country_code'] = (string) $proto->getCountryCode();
                     $this->attributes['mobile'] = $phoneUtil->getNationalSignificantNumber($proto);
+
                     return;
                 }
             } catch (NumberParseException) {
@@ -362,8 +366,8 @@ class Customer extends Authenticatable
             return null;
         }
 
-        $startTime = \Carbon\Carbon::createFromFormat('H:i', $start);
-        $endTime = \Carbon\Carbon::createFromFormat('H:i', $end);
+        $startTime = Carbon::createFromFormat('H:i', $start);
+        $endTime = Carbon::createFromFormat('H:i', $end);
 
         if ($endTime->lessThanOrEqualTo($startTime)) {
             $endTime->addDay();
@@ -557,11 +561,22 @@ class Customer extends Authenticatable
     //     return $this->hasOne(VerifyCustomer::class, 'user_id');
     // }
 
-    public function getIsUserVerifiedAttribute()
+    public function getIsUserVerifiedAttribute(): bool
     {
-        return $this->whereHas('verifyCustomer', function ($query) {
-            $query->where(['user_id' => $this->id, 'status' => 'approved']);
-        })->exists() ? true : false;
+        $verification = $this->verifyCustomer;
+
+        // 1. Permanent manual/admin approval
+        if ($verification && $verification->status === 'approved' && in_array($verification->source, ['admin', 'manual'])) {
+            return true;
+        }
+
+        // 2. Subscription-driven verification: requires an active subscription
+        if ($verification && $verification->status === 'approved' && $verification->source === 'subscription') {
+            return $this->user_purchased_package()->onlyActive()->exists();
+        }
+
+        // 3. Fallback: Check if user currently has an active subscription
+        return $this->user_purchased_package()->onlyActive()->exists();
     }
 
     public function getIsDemoUserAttribute()

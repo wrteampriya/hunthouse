@@ -815,6 +815,10 @@ class VerifyCustomerFormController extends Controller
             DB::beginTransaction();
             $verification = VerifyCustomer::with('user')->findOrFail($request->edit_id);
             $verification->status = $request->edit_status;
+            if ($request->edit_status == 'approved') {
+                // Admin approval is permanent: not cancelled by subscription expiry
+                $verification->source = 'admin';
+            }
             $verification->save();
 
             $user = $verification->user;

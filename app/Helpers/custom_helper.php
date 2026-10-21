@@ -510,7 +510,7 @@ function get_property_details($result, $current_user = null, $skipLimitCheck = f
             $tempRow['is_admin'] = false;
             $tempRow['is_agent'] = $customer->is_agent;
             $tempRow['is_agent_verified'] = $customer->is_agent_verified;
-            $tempRow['is_user_verified'] = $customer->verifyCustomer?->status === 'approved';
+            $tempRow['is_user_verified'] = (bool) ($customer->is_user_verified ?? false);
             $tempRow['agent_profile'] = $customer->agent_profile;
             $tempRow['has_active_story'] = $customer->is_agent ? (bool) ($customer->has_active_story ?? false) : false;
             $tempRow['is_following'] = $customer->is_agent && $current_user ? AgentFollow::where('user_id', $current_user)->where('agent_id', $customer->id)->exists() : false;
@@ -709,7 +709,7 @@ function handleFileUpload($request, $key, $destinationPath, $filename, $database
             $filename = $filename;
         }
 
-        if (!file_exists($destinationPath)) {
+        if (! file_exists($destinationPath)) {
             mkdir($destinationPath, 0755, true);
         }
 
@@ -904,20 +904,20 @@ if (! function_exists('format_price')) {
             return '';
         }
 
-        $price  = (float) $price;
+        $price = (float) $price;
         $symbol = system_setting('currency_symbol') ?? '';
         $suffix = (bool) (system_setting('number_with_suffix') ?? false);
 
         if ($suffix) {
             $crore = 10_000_000;
-            $lakh  = 100_000;
+            $lakh = 100_000;
 
             if ($price >= $crore) {
-                $value     = $price / $crore;
-                $formatted = rtrim(rtrim(number_format($value, 2), '0'), '.') . 'Cr';
+                $value = $price / $crore;
+                $formatted = rtrim(rtrim(number_format($value, 2), '0'), '.').'Cr';
             } elseif ($price >= $lakh) {
-                $value     = $price / $lakh;
-                $formatted = rtrim(rtrim(number_format($value, 2), '0'), '.') . 'Lac';
+                $value = $price / $lakh;
+                $formatted = rtrim(rtrim(number_format($value, 2), '0'), '.').'Lac';
             } else {
                 $formatted = number_format($price, 0);
             }
@@ -925,7 +925,7 @@ if (! function_exists('format_price')) {
             $formatted = number_format($price, $decimals);
         }
 
-        return $symbol . $formatted;
+        return $symbol.$formatted;
     }
 }
 

@@ -2,9 +2,8 @@
 
 namespace App\Http\Resources;
 
-use App\Models\AgentVerification;
+use App\Models\Customer;
 use App\Models\VerifyCustomer;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class CustomerResource extends JsonResource
@@ -24,7 +23,7 @@ class CustomerResource extends JsonResource
         // Identify the model that contains customer information
         // It could be the resource itself (if it's a Customer) or the 'customer' relationship (if it's a Project/Property)
         $customer = $this->resource;
-        if (!($customer instanceof \App\Models\Customer)) {
+        if (! ($customer instanceof Customer)) {
             $customer = $this->customer ?? $this->user;
         }
 
@@ -33,12 +32,16 @@ class CustomerResource extends JsonResource
             $data['is_agent'] = $customer?->is_agent ?? false;
         }
 
+        // if (in_array('is_user_verified', $this->extraFields)) {
+        //     $data['is_user_verified'] = ($customer?->verifyCustomer ?? $customer?->verify_customer)?->status === 'approved';
+        // }
+
         if (in_array('is_user_verified', $this->extraFields)) {
-            $data['is_user_verified'] = ($customer?->verifyCustomer ?? $customer?->verify_customer)?->status === 'approved';
+            $data['is_user_verified'] = (bool) ($customer?->is_user_verified ?? false);
         }
 
         if (in_array('is_appointment_available', $this->extraFields)) {
-            if ($customer instanceof \App\Models\Customer) {
+            if ($customer instanceof Customer) {
                 $data['is_appointment_available'] =
                     $customer->verifyCustomer?->status === 'approved' &&
                     $customer->property->where('status', 1)
@@ -52,15 +55,15 @@ class CustomerResource extends JsonResource
         }
 
         if (in_array('become_agent_status', $this->extraFields)) {
-            $data['become_agent_status'] = $customer?->becomeAgent?->status ?? "not_applied";
+            $data['become_agent_status'] = $customer?->becomeAgent?->status ?? 'not_applied';
         }
 
         if (in_array('agent_verification_status', $this->extraFields)) {
-            $data['agent_verification_status'] = $customer?->verifyAgent?->status ?? "not_applied";
+            $data['agent_verification_status'] = $customer?->verifyAgent?->status ?? 'not_applied';
         }
 
         if (in_array('user_verification_status', $this->extraFields)) {
-            $data['user_verification_status'] = ($customer?->verifyCustomer ?? $customer?->verify_customer)?->status ?? "not_applied";
+            $data['user_verification_status'] = ($customer?->verifyCustomer ?? $customer?->verify_customer)?->status ?? 'not_applied';
         }
 
         return $data;

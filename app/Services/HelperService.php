@@ -8,15 +8,16 @@ use App\Models\AgentProfile;
 use App\Models\AgentVerification;
 use App\Models\AgentVerificationValue;
 use App\Models\Appointment;
+use App\Models\Country;
 use App\Models\Customer;
 use App\Models\Feature;
 use App\Models\Language;
 use App\Models\NumberOtp;
 use App\Models\PackageFeature;
+use App\Models\parameter;
 use App\Models\PasswordReset;
 use App\Models\Projects;
 use App\Models\ProjectView;
-use App\Models\parameter;
 use App\Models\Property;
 use App\Models\PropertyView;
 use App\Models\Setting;
@@ -31,6 +32,8 @@ use App\Models\VerifyCustomer;
 use Carbon\Carbon;
 use Exception;
 use GuzzleHttp\Client;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -83,12 +86,12 @@ class HelperService
      * incorrectly fail the required-language check on every edit.
      * Used to check the country-based required-language rule.
      *
-     * @param  \Illuminate\Database\Eloquent\Model|null  $existingListing  Pass the
-     *         listing being updated so its already-saved translations count too;
-     *         omit (or pass a new/unsaved model) on create — nothing to inherit yet.
+     * @param  Model|null  $existingListing  Pass the
+     *                                       listing being updated so its already-saved translations count too;
+     *                                       omit (or pass a new/unsaved model) on create — nothing to inherit yet.
      * @return array<int>
      */
-    public static function filledTranslationLanguageIds(\Illuminate\Http\Request $request, $existingListing = null): array
+    public static function filledTranslationLanguageIds(Request $request, $existingListing = null): array
     {
         $languageIds = [];
 
@@ -136,7 +139,7 @@ class HelperService
      */
     public static function effectiveRequiredLanguageId(?int $countryId): ?int
     {
-        return \App\Models\Country::requiredLanguageIdFor($countryId) ?? self::currentContentLanguageId();
+        return Country::requiredLanguageIdFor($countryId) ?? self::currentContentLanguageId();
     }
 
     /**
@@ -145,7 +148,7 @@ class HelperService
      * languages stay optional.
      *
      * @param  array<int>  $filledLanguageIds  Language ids the listing currently has title+description content for.
-     * @return string|null  An error message, or null if the listing is valid.
+     * @return string|null An error message, or null if the listing is valid.
      */
     public static function validateRequiredLanguageContent(?int $countryId, array $filledLanguageIds): ?string
     {
@@ -173,7 +176,7 @@ class HelperService
      *
      * @return array{title: ?string, description: ?string}
      */
-    public static function resolveBaseContent(\Illuminate\Http\Request $request, ?int $preferredLanguageId = null): array
+    public static function resolveBaseContent(Request $request, ?int $preferredLanguageId = null): array
     {
         $title = $request->title;
         $description = $request->description;
@@ -1022,8 +1025,8 @@ class HelperService
     public static function getActivePackage($userId, $packageId, $role = null)
     {
         $userPackages = UserPackage::where(['user_id' => $userId, 'package_id' => $packageId])
-        ->forRole()    
-        ->onlyActive()
+            ->forRole()
+            ->onlyActive()
             ->first();
 
         return $userPackages;
@@ -1915,7 +1918,7 @@ class HelperService
     {
         $feature = self::checkAgentWatermarkFeature($agentId);
 
-        log::info('Agent Watermark Feature Check', ['agent_id' => $agentId, 'feature_check_result' => $feature]);
+        Log::info('Agent Watermark Feature Check', ['agent_id' => $agentId, 'feature_check_result' => $feature]);
 
         return ! empty($feature['feature_available']) && ! empty($feature['limit_available']);
     }
@@ -1935,11 +1938,11 @@ class HelperService
             $fileExists = $watermarkPath ? file_exists($watermarkPath) : false;
 
             Log::info('Watermark: agent config resolved', [
-                'agent_id'        => $agentId,
+                'agent_id' => $agentId,
                 'watermark_enabled' => (bool) $agentProfile->watermark_enabled,
                 'watermark_image' => $watermarkImage,
-                'expected_path'   => $watermarkPath,
-                'file_exists'     => $fileExists,
+                'expected_path' => $watermarkPath,
+                'file_exists' => $fileExists,
             ]);
 
             return [
@@ -1966,10 +1969,10 @@ class HelperService
             $agentWatermarkConfig = self::getAgentWatermarkConfig($agentId);
 
             Log::info('Watermark: resolving for agent', [
-                'agent_id'       => $agentId,
-                'enabled'        => $agentWatermarkConfig['enabled'] ?? false,
+                'agent_id' => $agentId,
+                'enabled' => $agentWatermarkConfig['enabled'] ?? false,
                 'watermark_path' => $agentWatermarkConfig['watermark_path'] ?? null,
-                'result'         => (! empty($agentWatermarkConfig['enabled']) && ! empty($agentWatermarkConfig['watermark_path'])) ? 'agent_applied' : 'falling_back_to_admin',
+                'result' => (! empty($agentWatermarkConfig['enabled']) && ! empty($agentWatermarkConfig['watermark_path'])) ? 'agent_applied' : 'falling_back_to_admin',
             ]);
 
             if (! empty($agentWatermarkConfig['enabled']) && ! empty($agentWatermarkConfig['watermark_path'])) {
@@ -2367,7 +2370,8 @@ class HelperService
             'is_agent_verified' => isset($agentData['verify_agent']) &&
                 strtolower($agentData['verify_agent']->status) === 'approved',
 
-            'is_user_verified' => strtolower($userVerification?->status ?? '') === 'approved',
+            // 'is_user_verified' => strtolower($userVerification?->status ?? '') === 'approved',
+            'is_user_verified' => (bool) ($userData?->is_user_verified ?? (strtolower($userVerification?->status ?? '') === 'approved')),
 
             'agent_verification_status' => $agentData['verify_agent']->status ?? 'not_applied',
 
